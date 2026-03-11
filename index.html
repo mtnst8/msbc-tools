@@ -671,14 +671,16 @@ async function createSalesOrder(payload, realmId) {
   // QBO Online uses "Estimate" for Sales Orders
   const url = `${baseUrl}/v3/company/${realmId}/estimate?minorversion=65`;
 
-  const resp = await fetch(url, {
+  const resp = await fetch('https://msbc-qbo-auth.brian-a40.workers.dev', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({ Estimate: payload }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'qbo_api',
+      access_token: accessToken,
+      realm_id: realmId,
+      payload,
+      environment: currentEnv,
+    }),
   });
 
   const data = await resp.json();
