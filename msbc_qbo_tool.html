@@ -367,7 +367,7 @@
     <input type="password" id="clientSecret" placeholder="mlCPR6..." />
 
     <label>Company ID (Realm ID)</label>
-    <input type="text" id="realmId" placeholder="1-69af76d4-..." />
+    <input type="text" id="realmId" placeholder="109822452" />
 
     <label>Redirect URI (must match your Intuit app settings)</label>
     <input type="text" id="redirectUri" value="" id="redirectUri" />
@@ -429,19 +429,20 @@
 <script>
 // ── Config ──────────────────────────────────────────────────────────────
 let accessToken = null;
+let itemIdMap = {}; // Maps product value -> QBO item Id
 let currentEnv = 'sandbox';
 
 const PRODUCTS = [
-  { label: '1/2 BBL Cold Trail', value: '2 Self Distribute:Cold Trail 1/2 BBL', desc: '1/2 BBL Cold Trail Ale' },
-  { label: '1/2 BBL Almost Heaven (Amber)', value: '2 Self Distribute:Amber 1/2 BBL', desc: '1/2 BBL Almost Heaven Amber Ale' },
-  { label: '1/2 BBL Seneca IPA', value: '2 Self Distribute:Seneca 1/2 BBL', desc: '1/2 BBL Seneca Indian Pale Ale' },
-  { label: "1/2 BBL Miner's Daughter", value: "2 Self Distribute:Miner's Daughter 1/2 BBL", desc: "1/2 BBL Miner's Daughter Oatmeal Stout" },
-  { label: '1/2 BBL Seasonal', value: '2 Self Distribute:Seasonal 1/2 BBL', desc: '1/2 BBL Mtn State Brewing Seasonal' },
-  { label: 'Cans - Cold Trail', value: '2 Self Distribute:Cold Trail - Cans', desc: '24/12 oz Cold Trail Ale' },
-  { label: 'Cans - Almost Heaven (Amber)', value: '2 Self Distribute:Amber - Cans', desc: '24/12 oz Almost Heaven Amber Ale' },
-  { label: 'Cans - Seneca IPA', value: '2 Self Distribute:Seneca - Cans', desc: '24/12 oz Seneca IPA' },
-  { label: "Cans - Miner's Daughter", value: "2 Self Distribute:Miner's Daughter - Cans", desc: "24/12 oz Miner's Daughter Oatmeal Stout" },
-  { label: 'Cans - Seasonal', value: '2 Self Distribute:Seasonal Cans', desc: 'Seasonal Cans 24pk/12oz' },
+  { label: '1/2 BBL Cold Trail', value: '2 Self Distribute:Cold Trail 1/2 BBL', desc: '1/2 BBL Cold Trail Ale', price: 165.00 },
+  { label: '1/2 BBL Almost Heaven (Amber)', value: '2 Self Distribute:Amber 1/2 BBL', desc: '1/2 BBL Almost Heaven Amber Ale', price: 165.00 },
+  { label: '1/2 BBL Seneca IPA', value: '2 Self Distribute:Seneca 1/2 BBL', desc: '1/2 BBL Seneca Indian Pale Ale', price: 165.00 },
+  { label: "1/2 BBL Miner's Daughter", value: "2 Self Distribute:Miner's Daughter 1/2 BBL", desc: "1/2 BBL Miner's Daughter Oatmeal Stout", price: 165.00 },
+  { label: '1/2 BBL Seasonal', value: '2 Self Distribute:Seasonal 1/2 BBL', desc: '1/2 BBL Mtn State Brewing Seasonal', price: 165.00 },
+  { label: 'Cans - Cold Trail', value: '2 Self Distribute:Cold Trail - Cans', desc: '24/12 oz Cold Trail Ale', price: 33.99 },
+  { label: 'Cans - Almost Heaven (Amber)', value: '2 Self Distribute:Amber - Cans', desc: '24/12 oz Almost Heaven Amber Ale', price: 33.99 },
+  { label: 'Cans - Seneca IPA', value: '2 Self Distribute:Seneca - Cans', desc: '24/12 oz Seneca IPA', price: 33.99 },
+  { label: "Cans - Miner's Daughter", value: "2 Self Distribute:Miner's Daughter - Cans", desc: "24/12 oz Miner's Daughter Oatmeal Stout", price: 33.99 },
+  { label: 'Cans - Seasonal', value: '2 Self Distribute:Seasonal Cans', desc: 'Seasonal Cans 24pk/12oz', price: 34.99 },
 ];
 
 const CUSTOMERS = {
@@ -467,6 +468,10 @@ const DEFAULT_LINES = {
 
 // ── Init ─────────────────────────────────────────────────────────────────
 window.onload = () => {
+  // Restore environment selection (use localStorage to survive OAuth redirect)
+  const savedEnv = localStorage.getItem('qbo_env') || sessionStorage.getItem('qbo_env') || 'sandbox';
+  setEnv(savedEnv);
+
   // Load saved credentials from sessionStorage if available
   document.getElementById('clientId').value = sessionStorage.getItem('qbo_client_id') || '';
   document.getElementById('clientSecret').value = sessionStorage.getItem('qbo_client_secret') || '';
@@ -488,6 +493,8 @@ window.onload = () => {
 // ── Environment ───────────────────────────────────────────────────────────
 function setEnv(env) {
   currentEnv = env;
+  sessionStorage.setItem('qbo_env', env);
+  localStorage.setItem('qbo_env', env);
   document.getElementById('env-sandbox').classList.toggle('active', env === 'sandbox');
   document.getElementById('env-prod').classList.toggle('active', env === 'production');
 }
@@ -509,6 +516,8 @@ function startOAuth() {
   sessionStorage.setItem('qbo_client_id', clientId);
   sessionStorage.setItem('qbo_client_secret', document.getElementById('clientSecret').value.trim());
   sessionStorage.setItem('qbo_realm_id', document.getElementById('realmId').value.trim());
+  // Save env to localStorage so it survives the OAuth redirect
+  localStorage.setItem('qbo_env', currentEnv);
 
   const authUrl = new URL('https://appcenter.intuit.com/connect/oauth2');
   authUrl.searchParams.set('client_id', clientId);
@@ -647,23 +656,73 @@ function collectLines(loc) {
 async function buildSOPayload(soName, date, customer, lines, realmId) {
   // QBO uses Estimate as the equivalent of Sales Order
   // Build line items — QBO requires ItemRef which needs querying
-  const lineItems = lines.map((line, i) => ({
-    DetailType: 'SalesItemLineDetail',
-    Amount: 0,
-    Description: line.desc,
-    SalesItemLineDetail: {
-      ItemRef: { name: line.productName },
-      Qty: line.qty,
-    }
-  }));
+  const lineItems = lines.map((line, i) => {
+    const product = PRODUCTS.find(p => p.value === line.productName);
+    const unitPrice = product?.price || 0;
+    const itemId = itemIdMap[line.productName] || itemIdMap[line.productName.split(':')[1]] || null;
+    const itemRef = itemId
+      ? { value: itemId, name: line.productName }
+      : { name: line.productName };
+    return {
+      DetailType: 'SalesItemLineDetail',
+      Amount: unitPrice * line.qty,
+      Description: line.desc,
+      SalesItemLineDetail: {
+        ItemRef: itemRef,
+        Qty: line.qty,
+        UnitPrice: unitPrice,
+      }
+    };
+  });
+
+  const custId = customerIdMap[customer.name];
+  const customerRef = custId
+    ? { value: custId, name: customer.name }
+    : { name: customer.name };
 
   return {
     DocNumber: soName,
     TxnDate: date,
-    CustomerRef: { name: customer.name },
+    CustomerRef: customerRef,
     Line: lineItems,
-    CustomField: [{ DefinitionId: '1', StringValue: soName, Type: 'StringType' }],
   };
+}
+
+let customerIdMap = {};
+
+async function qboQuery(query) {
+  const realmId = document.getElementById('realmId').value.trim();
+  const resp = await fetch('https://msbc-qbo-auth.brian-a40.workers.dev', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'qbo_query',
+      access_token: accessToken,
+      realm_id: realmId,
+      query,
+      environment: currentEnv,
+    }),
+  });
+  return resp.json();
+}
+
+async function fetchItemIds() {
+  // Fetch item IDs
+  const itemData = await qboQuery("SELECT Id, Name, FullyQualifiedName FROM Item WHERE Active = true MAXRESULTS 200");
+  const items = itemData?.QueryResponse?.Item || [];
+  itemIdMap = {};
+  items.forEach(item => {
+    itemIdMap[item.FullyQualifiedName] = item.Id;
+    itemIdMap[item.Name] = item.Id;
+  });
+  console.log('Item IDs loaded:', itemIdMap);
+
+  // Fetch customer IDs
+  const custData = await qboQuery("SELECT Id, DisplayName FROM Customer WHERE Active = true MAXRESULTS 100");
+  const customers = custData?.QueryResponse?.Customer || [];
+  customerIdMap = {};
+  customers.forEach(c => { customerIdMap[c.DisplayName] = c.Id; });
+  console.log('Customer IDs loaded:', customerIdMap);
 }
 
 async function createSalesOrder(payload, realmId) {
@@ -677,7 +736,7 @@ async function createSalesOrder(payload, realmId) {
     body: JSON.stringify({
       action: 'qbo_api',
       access_token: accessToken,
-      realm_id: realmId,
+      realm_id: document.getElementById('realmId').value.trim(),
       payload,
       environment: currentEnv,
     }),
