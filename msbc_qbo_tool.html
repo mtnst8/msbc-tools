@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSBC → QuickBooks Sales Orders</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --gold: #C8922A;
+    --gold-light: #E8B84B;
+    --dark: #0F0E0C;
+    --dark2: #1A1916;
+    --dark3: #242320;
+    --border: #2E2C28;
+    --text: #E8E4DC;
+    --muted: #7A7568;
+    --success: #4CAF7D;
+    --error: #E05C5C;
+    --warning: #E8A84B;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    margin-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    letter-spacing: 2px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  h1 span { color: var(--gold); }
+
+  .subtitle {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 300;
+  }
+
+  .card {
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .step-badge {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--dark);
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-badge.done { background: var(--success); }
+  .step-badge.skip { background: var(--dark3); color: var(--muted); border: 1px solid var(--border); }
+
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 14px;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--gold);
+  }
+
+  select option { background: var(--dark3); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--gold);
+    color: var(--dark);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn:hover { background: var(--gold-light); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { background: var(--dark3); color: var(--muted); cursor: not-allowed; }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+  }
+  .btn-outline:hover { background: var(--gold); color: var(--dark); }
+
+  .btn-success { background: var(--success); }
+  .btn-success:hover { background: #5DC98E; }
+
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+
+  .order-section {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .order-section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--gold-light);
+    margin-bottom: 12px;
+  }
+
+  .line-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .line-item select { margin-bottom: 0; flex: 2; }
+  .line-item input { margin-bottom: 0; flex: 0 0 70px; }
+
+  .line-item .remove-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    width: 28px; height: 28px;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .line-item .remove-btn:hover { border-color: var(--error); color: var(--error); }
+
+  .add-line-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 8px;
+    width: 100%;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    transition: all 0.2s;
+    margin-top: 4px;
+  }
+  .add-line-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .status-bar {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 16px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-bar.success { border-color: var(--success); color: var(--success); }
+  .status-bar.error { border-color: var(--error); color: var(--error); }
+  .status-bar.loading { color: var(--gold); }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .token-display {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--success);
+    background: var(--dark3);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    padding: 10px 14px;
+    word-break: break-all;
+    margin-top: 10px;
+    display: none;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .info-text {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .info-text a { color: var(--gold); text-decoration: none; }
+  .info-text a:hover { text-decoration: underline; }
+
+  .hidden { display: none !important; }
+
+  .success-result {
+    background: rgba(76, 175, 125, 0.08);
+    border: 1px solid var(--success);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+
+  .success-result h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: var(--success);
+    margin-bottom: 12px;
+  }
+
+  .so-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--gold);
+    display: block;
+    margin-top: 6px;
+  }
+
+  .env-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .env-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--dark3);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .env-btn.active {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(200,146,42,0.08);
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="container">
+
+  <header>
+    <div class="logo">MOUNTAIN STATE BREWING CO.</div>
+    <h1>QBO SALES <span>ORDER</span> TOOL</h1>
+    <div class="subtitle">Create sales orders directly in QuickBooks Online</div>
+  </header>
+
+  <!-- STEP 1: Credentials -->
+  <div class="card" id="step1-card">
+    <div class="card-title">
+      <div class="step-badge" id="badge1">1</div>
+      CONNECT TO QUICKBOOKS
+    </div>
+
+    <div class="env-toggle">
+      <div class="env-btn active" onclick="setEnv('sandbox')" id="env-sandbox">Sandbox / Dev</div>
+      <div class="env-btn" onclick="setEnv('production')" id="env-prod">Production</div>
+    </div>
+
+    <label>Client ID</label>
+    <input type="text" id="clientId" placeholder="ABZqVY..." />
+
+    <label>Client Secret</label>
+    <input type="password" id="clientSecret" placeholder="mlCPR6..." />
+
+    <label>Company ID (Realm ID)</label>
+    <input type="text" id="realmId" placeholder="109822452" />
+
+    <label>Redirect URI (must match your Intuit app settings)</label>
+    <input type="text" id="redirectUri" value="" id="redirectUri" />
+
+    <button class="btn" onclick="startOAuth()">⚡ AUTHORIZE WITH QUICKBOOKS</button>
+
+    <div class="status-bar" id="auth-status">Waiting for authorization...</div>
+
+    <div class="token-display" id="token-display"></div>
+  </div>
+
+  <!-- STEP 2: Build Orders -->
+  <div class="card" id="step2-card">
+    <div class="card-title">
+      <div class="step-badge skip" id="badge2">2</div>
+      BUILD SALES ORDERS
+    </div>
+
+    <div id="orders-container">
+
+      <!-- Star City -->
+      <div class="order-section">
+        <div class="order-section-title">⬡ STAR CITY</div>
+        <label>Sales Order Name</label>
+        <input type="text" id="so-name-starcity" value="StarCity-03/11/2026" />
+        <label>Transaction Date</label>
+        <input type="date" id="so-date-starcity" value="2026-03-11" />
+        <div id="lines-starcity"></div>
+        <button class="add-line-btn" onclick="addLine('starcity')">+ Add Line Item</button>
+      </div>
+
+      <!-- Morgantown -->
+      <div class="order-section">
+        <div class="order-section-title">⬡ MORGANTOWN (WHARF)</div>
+        <label>Sales Order Name</label>
+        <input type="text" id="so-name-morgantown" value="Morgantown-03/11/2026" />
+        <label>Transaction Date</label>
+        <input type="date" id="so-date-morgantown" value="2026-03-11" />
+        <div id="lines-morgantown"></div>
+        <button class="add-line-btn" onclick="addLine('morgantown')">+ Add Line Item</button>
+      </div>
+
+    </div>
+
+    <hr class="divider">
+    <button class="btn btn-success" onclick="submitOrders()" id="submit-btn" disabled>
+      ⬆ PUSH TO QUICKBOOKS
+    </button>
+    <div class="status-bar" id="submit-status">Authorize first to enable submission.</div>
+
+    <div class="success-result" id="success-result">
+      <h3>✓ ORDERS CREATED</h3>
+      <div id="success-links"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────
+let accessToken = null;
+let itemIdMap = {}; // Maps product value -> QBO item Id
+let currentEnv = 'sandbox';
+
+const PRODUCTS = [
+  { label: '1/2 BBL Cold Trail', value: '2 Self Distribute:Cold Trail 1/2 BBL', desc: '1/2 BBL Cold Trail Ale', price: 165.00 },
+  { label: '1/2 BBL Almost Heaven (Amber)', value: '2 Self Distribute:Amber 1/2 BBL', desc: '1/2 BBL Almost Heaven Amber Ale', price: 165.00 },
+  { label: '1/2 BBL Seneca IPA', value: '2 Self Distribute:Seneca 1/2 BBL', desc: '1/2 BBL Seneca Indian Pale Ale', price: 165.00 },
+  { label: "1/2 BBL Miner's Daughter", value: "2 Self Distribute:Miner's Daughter 1/2 BBL", desc: "1/2 BBL Miner's Daughter Oatmeal Stout", price: 165.00 },
+  { label: '1/2 BBL Seasonal', value: '2 Self Distribute:Seasonal 1/2 BBL', desc: '1/2 BBL Mtn State Brewing Seasonal', price: 165.00 },
+  { label: 'Cans - Cold Trail', value: '2 Self Distribute:Cold Trail - Cans', desc: '24/12 oz Cold Trail Ale', price: 33.99 },
+  { label: 'Cans - Almost Heaven (Amber)', value: '2 Self Distribute:Amber - Cans', desc: '24/12 oz Almost Heaven Amber Ale', price: 33.99 },
+  { label: 'Cans - Seneca IPA', value: '2 Self Distribute:Seneca - Cans', desc: '24/12 oz Seneca IPA', price: 33.99 },
+  { label: "Cans - Miner's Daughter", value: "2 Self Distribute:Miner's Daughter - Cans", desc: "24/12 oz Miner's Daughter Oatmeal Stout", price: 33.99 },
+  { label: 'Cans - Seasonal', value: '2 Self Distribute:Seasonal Cans', desc: 'Seasonal Cans 24pk/12oz', price: 34.99 },
+];
+
+const CUSTOMERS = {
+  starcity: { name: 'MSBC - Star City', displayName: 'MSBC - Star City' },
+  morgantown: { name: 'MSBC - Morgantown', displayName: 'MSBC - Morgantown' },
+};
+
+// Pre-populate default order from Shelby's email
+const DEFAULT_LINES = {
+  starcity: [
+    { product: '2 Self Distribute:Cold Trail 1/2 BBL', qty: 2 },
+    { product: '2 Self Distribute:Amber - Cans', qty: 1 },
+    { product: '2 Self Distribute:Seneca - Cans', qty: 1 },
+    { product: "2 Self Distribute:Miner's Daughter - Cans", qty: 1 },
+  ],
+  morgantown: [
+    { product: '2 Self Distribute:Cold Trail 1/2 BBL', qty: 2 },
+    { product: '2 Self Distribute:Amber 1/2 BBL', qty: 2 },
+    { product: '2 Self Distribute:Seneca - Cans', qty: 1 },
+    { product: "2 Self Distribute:Miner's Daughter - Cans", qty: 2 },
+  ],
+};
+
+// ── Init ─────────────────────────────────────────────────────────────────
+window.onload = () => {
+  // Restore environment selection (use localStorage to survive OAuth redirect)
+  const savedEnv = localStorage.getItem('qbo_env') || sessionStorage.getItem('qbo_env') || 'sandbox';
+  setEnv(savedEnv);
+
+  // Load saved credentials from sessionStorage if available
+  document.getElementById('clientId').value = sessionStorage.getItem('qbo_client_id') || '';
+  document.getElementById('clientSecret').value = sessionStorage.getItem('qbo_client_secret') || '';
+  document.getElementById('realmId').value = sessionStorage.getItem('qbo_realm_id') || '';
+  document.getElementById('redirectUri').value = window.location.origin + window.location.pathname.replace(/\?.*$/, '');
+
+  ['starcity', 'morgantown'].forEach(loc => {
+    DEFAULT_LINES[loc].forEach(line => addLine(loc, line.product, line.qty));
+  });
+
+  // Check if returning from OAuth
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('code')) {
+    setStatus('auth-status', 'loading', 'Exchanging authorization code...');
+    exchangeCode(params.get('code'), params.get('realmId') || document.getElementById('realmId').value);
+  }
+};
+
+// ── Environment ───────────────────────────────────────────────────────────
+function setEnv(env) {
+  currentEnv = env;
+  sessionStorage.setItem('qbo_env', env);
+  localStorage.setItem('qbo_env', env);
+  document.getElementById('env-sandbox').classList.toggle('active', env === 'sandbox');
+  document.getElementById('env-prod').classList.toggle('active', env === 'production');
+}
+
+function getBaseUrl() {
+  return currentEnv === 'sandbox'
+    ? 'https://sandbox-quickbooks.api.intuit.com'
+    : 'https://quickbooks.api.intuit.com';
+}
+
+// ── OAuth ─────────────────────────────────────────────────────────────────
+function startOAuth() {
+  const clientId = document.getElementById('clientId').value.trim();
+  const redirectUri = document.getElementById('redirectUri').value.trim();
+
+  if (!clientId) { setStatus('auth-status', 'error', 'Enter your Client ID first.'); return; }
+
+  // Save to sessionStorage (browser memory only, cleared when tab closes)
+  sessionStorage.setItem('qbo_client_id', clientId);
+  sessionStorage.setItem('qbo_client_secret', document.getElementById('clientSecret').value.trim());
+  sessionStorage.setItem('qbo_realm_id', document.getElementById('realmId').value.trim());
+  // Save env to localStorage so it survives the OAuth redirect
+  localStorage.setItem('qbo_env', currentEnv);
+
+  const authUrl = new URL('https://appcenter.intuit.com/connect/oauth2');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('scope', 'com.intuit.quickbooks.accounting');
+  authUrl.searchParams.set('state', 'msbc_so_tool');
+
+  setStatus('auth-status', 'loading', 'Opening Intuit authorization page...');
+  window.location.href = authUrl.toString();
+}
+
+async function exchangeCode(code, realmId) {
+  const clientId = document.getElementById('clientId').value.trim();
+  const clientSecret = document.getElementById('clientSecret').value.trim();
+  const redirectUri = document.getElementById('redirectUri').value.trim();
+  if (realmId) document.getElementById('realmId').value = realmId;
+
+  try {
+    // Token exchange via Cloudflare Worker proxy (avoids CORS)
+    const resp = await fetch('https://msbc-qbo-auth.brian-a40.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+
+    const data = await resp.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      setStatus('auth-status', 'success', '✓ Authorized! Token acquired.');
+      document.getElementById('badge1').classList.add('done');
+      document.getElementById('badge1').textContent = '✓';
+      document.getElementById('badge2').classList.remove('skip');
+      document.getElementById('submit-btn').disabled = false;
+      setStatus('submit-status', '', 'Ready to push orders to QuickBooks.');
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else {
+      setStatus('auth-status', 'error', `Auth failed: ${data.error_description || JSON.stringify(data)}`);
+    }
+  } catch (e) {
+    setStatus('auth-status', 'error', `Error: ${e.message}`);
+  }
+}
+
+// ── Line Items ─────────────────────────────────────────────────────────────
+let lineCounters = { starcity: 0, morgantown: 0 };
+
+function addLine(loc, productValue = '', qty = 1) {
+  const id = lineCounters[loc]++;
+  const container = document.getElementById(`lines-${loc}`);
+  const div = document.createElement('div');
+  div.className = 'line-item';
+  div.id = `line-${loc}-${id}`;
+
+  const options = PRODUCTS.map(p =>
+    `<option value="${p.value}" ${p.value === productValue ? 'selected' : ''}>${p.label}</option>`
+  ).join('');
+
+  div.innerHTML = `
+    <select id="product-${loc}-${id}">${options}</select>
+    <input type="number" id="qty-${loc}-${id}" value="${qty}" min="1" style="width:70px" />
+    <button class="remove-btn" onclick="removeLine('${loc}', ${id})">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+function removeLine(loc, id) {
+  const el = document.getElementById(`line-${loc}-${id}`);
+  if (el) el.remove();
+}
+
+// ── Submit Orders ──────────────────────────────────────────────────────────
+async function submitOrders() {
+  if (!accessToken) { setStatus('submit-status', 'error', 'Not authorized. Complete Step 1 first.'); return; }
+
+  setStatus('submit-status', 'loading', 'Creating sales orders in QuickBooks...');
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('success-result').style.display = 'none';
+
+  const realmId = document.getElementById('realmId').value.trim();
+  const results = [];
+  const errors = [];
+
+  for (const loc of ['starcity', 'morgantown']) {
+    try {
+      const soName = document.getElementById(`so-name-${loc}`).value.trim();
+      const date = document.getElementById(`so-date-${loc}`).value;
+      const customer = CUSTOMERS[loc];
+      const lines = collectLines(loc);
+
+      if (lines.length === 0) continue;
+
+      // First, look up customer and item refs
+      const soPayload = await buildSOPayload(soName, date, customer, lines, realmId);
+      const result = await createSalesOrder(soPayload, realmId);
+      results.push({ loc, soName, id: result.SalesOrder?.Id || result.Invoice?.Id });
+    } catch (e) {
+      errors.push({ loc, error: e.message });
+    }
+  }
+
+  document.getElementById('submit-btn').disabled = false;
+
+  if (errors.length > 0) {
+    setStatus('submit-status', 'error', `Error: ${errors.map(e => `${e.loc}: ${e.error}`).join(' | ')}`);
+  } else if (results.length > 0) {
+    setStatus('submit-status', 'success', `✓ ${results.length} sales order(s) created successfully!`);
+    showSuccessLinks(results, realmId);
+  }
+}
+
+function collectLines(loc) {
+  const lines = [];
+  const container = document.getElementById(`lines-${loc}`);
+  container.querySelectorAll('.line-item').forEach(div => {
+    const idMatch = div.id.match(/line-\w+-(\d+)/);
+    if (!idMatch) return;
+    const id = idMatch[1];
+    const productEl = document.getElementById(`product-${loc}-${id}`);
+    const qtyEl = document.getElementById(`qty-${loc}-${id}`);
+    if (productEl && qtyEl) {
+      const productValue = productEl.value;
+      const product = PRODUCTS.find(p => p.value === productValue);
+      lines.push({ productName: productValue, desc: product?.desc || '', qty: parseInt(qtyEl.value) || 1 });
+    }
+  });
+  return lines;
+}
+
+async function buildSOPayload(soName, date, customer, lines, realmId) {
+  // QBO uses Estimate as the equivalent of Sales Order
+  // Build line items — QBO requires ItemRef which needs querying
+  const lineItems = lines.map((line, i) => {
+    const product = PRODUCTS.find(p => p.value === line.productName);
+    const unitPrice = product?.price || 0;
+    const itemId = itemIdMap[line.productName] || itemIdMap[line.productName.split(':')[1]] || null;
+    const itemRef = itemId
+      ? { value: itemId, name: line.productName }
+      : { name: line.productName };
+    return {
+      DetailType: 'SalesItemLineDetail',
+      Amount: unitPrice * line.qty,
+      Description: line.desc,
+      SalesItemLineDetail: {
+        ItemRef: itemRef,
+        Qty: line.qty,
+        UnitPrice: unitPrice,
+      }
+    };
+  });
+
+  const custId = customerIdMap[customer.name];
+  const customerRef = custId
+    ? { value: custId, name: customer.name }
+    : { name: customer.name };
+
+  return {
+    DocNumber: soName,
+    TxnDate: date,
+    CustomerRef: customerRef,
+    Line: lineItems,
+  };
+}
+
+let customerIdMap = {};
+
+async function qboQuery(query) {
+  const realmId = document.getElementById('realmId').value.trim();
+  const resp = await fetch('https://msbc-qbo-auth.brian-a40.workers.dev', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'qbo_query',
+      access_token: accessToken,
+      realm_id: realmId,
+      query,
+      environment: currentEnv,
+    }),
+  });
+  return resp.json();
+}
+
+async function fetchItemIds() {
+  // Fetch item IDs
+  const itemData = await qboQuery("SELECT Id, Name, FullyQualifiedName FROM Item WHERE Active = true MAXRESULTS 200");
+  const items = itemData?.QueryResponse?.Item || [];
+  itemIdMap = {};
+  items.forEach(item => {
+    itemIdMap[item.FullyQualifiedName] = item.Id;
+    itemIdMap[item.Name] = item.Id;
+  });
+  console.log('Item IDs loaded:', itemIdMap);
+
+  // Fetch customer IDs
+  const custData = await qboQuery("SELECT Id, DisplayName FROM Customer WHERE Active = true MAXRESULTS 100");
+  const customers = custData?.QueryResponse?.Customer || [];
+  customerIdMap = {};
+  customers.forEach(c => { customerIdMap[c.DisplayName] = c.Id; });
+  console.log('Customer IDs loaded:', customerIdMap);
+}
+
+async function createSalesOrder(payload, realmId) {
+  const baseUrl = getBaseUrl();
+  // QBO Online uses "Estimate" for Sales Orders
+  const url = `${baseUrl}/v3/company/${realmId}/estimate?minorversion=65`;
+
+  const resp = await fetch('https://msbc-qbo-auth.brian-a40.workers.dev', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'qbo_api',
+      access_token: accessToken,
+      realm_id: document.getElementById('realmId').value.trim(),
+      payload,
+      environment: currentEnv,
+    }),
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) {
+    const errMsg = data?.Fault?.Error?.[0]?.Detail || data?.Fault?.Error?.[0]?.Message || JSON.stringify(data);
+    throw new Error(errMsg);
+  }
+  return data;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function setStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `status-bar ${type}`;
+  el.innerHTML = type === 'loading'
+    ? `<div class="dot"></div>${msg}`
+    : msg;
+}
+
+function showSuccessLinks(results, realmId) {
+  const container = document.getElementById('success-links');
+  const baseUrl = currentEnv === 'sandbox'
+    ? 'https://app.sandbox.qbo.intuit.com'
+    : 'https://app.qbo.intuit.com';
+
+  container.innerHTML = results.map(r =>
+    `<div style="margin-bottom:8px">
+      <span style="color:var(--text);font-family:'DM Mono',monospace;font-size:13px">${r.soName}</span>
+      ${r.id ? `<a class="so-link" href="${baseUrl}/app/estimate?txnId=${r.id}" target="_blank">→ View in QuickBooks (ID: ${r.id})</a>` : ''}
+    </div>`
+  ).join('');
+
+  document.getElementById('success-result').style.display = 'block';
+}
+</script>
+</body>
+</html>
